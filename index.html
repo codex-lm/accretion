@@ -136,6 +136,7 @@ h2 { font-size: clamp(28px, 6vw, 42px); font-weight: 800; letter-spacing: 0.14em
     <div id="how1"></div>
     <div id="how2"></div>
     <div id="how3"></div>
+    <div id="how4"></div>
   </div>
   <div id="homeBest"></div>
   <div class="bigrow">
@@ -376,6 +377,7 @@ const I18N = {
     how1: '<b>← →</b> or <b>A D</b> — spin the planet <b>·</b> drag on touch',
     how2: '<b>↓ S Space</b> — pull the nearest debris <b>·</b> tap on touch',
     how3: 'A full ring explodes and everything falls. Past the red line, it’s over.',
+    how4: 'Any piece lands anywhere — but a ring of a <b>single color</b> is a <b>PURE RING: ×3</b>',
     play: 'Play', best: 'BEST', level: 'LV',
     paused: 'PAUSED', resume: 'Resume', restart: 'Restart', home: 'Home',
     pauseHint: 'P / Esc to resume',
@@ -386,6 +388,7 @@ const I18N = {
     tutGap: 'fill the gap to close the ring',
     tutBoost: 'Space or tap — pull the debris',
     tutRing: 'full rings explode!',
+    tutPure: 'one color = PURE RING ×3!',
     tutUnstable: 'unstable core: it shatters its neighbors — save those gaps!',
     pure: 'PURE RING', chain: 'CHAIN', levelUp: 'LEVEL',
     soundOn: 'Sound on', soundOff: 'Sound off',
@@ -396,6 +399,7 @@ const I18N = {
     how1: '<b>← →</b> ou <b>A D</b> — tourner la planète <b>·</b> glisser au doigt',
     how2: '<b>↓ S Espace</b> — attirer le débris le plus proche <b>·</b> toucher brièvement',
     how3: 'Un anneau complet explose et tout retombe. Au-delà de la ligne rouge, c’est fini.',
+    how4: 'N’importe quelle pièce se pose n’importe où — mais un anneau d’<b>une seule couleur</b> est un <b>ANNEAU PUR : ×3</b>',
     play: 'Jouer', best: 'RECORD', level: 'NV',
     paused: 'PAUSE', resume: 'Reprendre', restart: 'Recommencer', home: 'Accueil',
     pauseHint: 'P / Échap pour reprendre',
@@ -406,6 +410,7 @@ const I18N = {
     tutGap: 'bouchez le trou pour fermer l’anneau',
     tutBoost: 'Espace ou touche — attirez le débris',
     tutRing: 'les anneaux complets explosent !',
+    tutPure: 'une seule couleur = ANNEAU PUR ×3 !',
     tutUnstable: 'noyau instable : il brise ses voisins — gardez ces trous !',
     pure: 'ANNEAU PUR', chain: 'CHAÎNE', levelUp: 'NIVEAU',
     soundOn: 'Son activé', soundOff: 'Son coupé',
@@ -416,6 +421,7 @@ const I18N = {
     how1: '<b>← →</b> o <b>A D</b> — girar el planeta <b>·</b> arrastra con el dedo',
     how2: '<b>↓ S Espacio</b> — atraer el escombro más cercano <b>·</b> toca brevemente',
     how3: 'Un anillo completo explota y todo cae. Más allá de la línea roja, se acaba.',
+    how4: 'Cualquier pieza cae en cualquier sitio — pero un anillo de <b>un solo color</b> es un <b>ANILLO PURO: ×3</b>',
     play: 'Jugar', best: 'RÉCORD', level: 'NV',
     paused: 'PAUSA', resume: 'Continuar', restart: 'Reiniciar', home: 'Inicio',
     pauseHint: 'P / Esc para continuar',
@@ -426,6 +432,7 @@ const I18N = {
     tutGap: 'rellena el hueco para cerrar el anillo',
     tutBoost: 'Espacio o toca — atrae el escombro',
     tutRing: '¡los anillos completos explotan!',
+    tutPure: '¡un solo color = ANILLO PURO ×3!',
     tutUnstable: 'núcleo inestable: rompe a sus vecinos… ¡guarda esos huecos!',
     pure: 'ANILLO PURO', chain: 'CADENA', levelUp: 'NIVEL',
     soundOn: 'Sonido activado', soundOff: 'Sonido desactivado',
@@ -875,7 +882,7 @@ function chainStep() {
   if (G.tut.active && !G.tut.ringClosed) {
     G.tut.ringClosed = true;
     G.tut.done = true; store.set(K.tut, true);
-    banner(T('tutRing'));
+    banner(ev.pure ? T('tutPure') : T('tutRing'));
   }
 }
 const waves = [];   // onde d'anneau pur
@@ -1343,6 +1350,7 @@ function applyLang() {
   document.getElementById('how1').innerHTML = T('how1');
   document.getElementById('how2').innerHTML = T('how2');
   document.getElementById('how3').innerHTML = T('how3');
+  document.getElementById('how4').innerHTML = T('how4');
   document.getElementById('btnPlay').textContent = T('play');
   document.getElementById('homeBest').textContent = G.best > 0 ? T('best') + ' ' + G.best : '';
   document.getElementById('pauseTitle').textContent = T('paused');
