@@ -1,0 +1,11 @@
+{
+  "title": "Accretion",
+  "description": "Spin a tiny planet to catch falling debris, close full rings and trigger gravity cascades before it grows past the red line.",
+  "entrypoint": "index.html",
+  "license": "MIT",
+  "genre": ["puzzle", "arcade"],
+  "themes": ["space", "physics"],
+  "controls": ["Left/Right or A/D: spin the planet", "Down or Space: pull the nearest debris", "Touch: drag to spin, tap to pull"],
+  "credits": ["Concept: Cédric Bernadac, with Claude", "Game made by Z-Code"],
+  "cover": "cover.png"
+}
