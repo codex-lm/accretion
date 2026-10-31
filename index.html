@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Accretion</title>
+<meta name="description" content="Accretion — spin a tiny planet to catch falling debris, close full rings and trigger gravity cascades before it grows past the red line.">
+<style>
+/* Accretion — feuille de style. Famille visuelle « espace graphite sobre » :
+   fond graphite neutre (aucune dominante indigo/violet), noyau crème chaud,
+   cinq teintes vives distinctes pour les débris, rouge danger unique. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+:root {
+  --bg: #0c0e11;
+  --bg2: #13161c;
+  --panel: rgba(19, 22, 28, 0.82);
+  --panel-border: rgba(232, 228, 218, 0.16);
+  --ink: #e8e4da;
+  --muted: #929aa8;
+  --core: #ded4c2;
+  --danger: #e5484d;
+  --c0: #ff6b5e; /* corail   · point  */
+  --c1: #ffc247; /* ambre    · rayure */
+  --c2: #51d88b; /* vert     · triangle */
+  --c3: #5aa9ff; /* bleu     · anneau  */
+  --c4: #ff7ab8; /* rose     · croix   */
+}
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none; -webkit-user-select: none;
+}
+#game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
+
+/* ----------------------------------------------------------------- HUD */
+#hud {
+  position: fixed; top: 0; left: 0; right: 0;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: calc(10px + env(safe-area-inset-top)) 14px 0;
+  pointer-events: none; z-index: 5;
+}
+#hudScore { font-size: 26px; font-weight: 700; letter-spacing: 0.04em; line-height: 1;
+  font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px rgba(0,0,0,0.6); }
+#hudBest { font-size: 12px; color: var(--muted); margin-top: 3px; letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums; }
+#hudRight { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+#hudLevel { font-size: 13px; font-weight: 700; letter-spacing: 0.14em; color: var(--muted);
+  border: 1px solid var(--panel-border); border-radius: 8px; padding: 4px 9px;
+  background: var(--panel); font-variant-numeric: tabular-nums; }
+#hudBtns { display: flex; gap: 6px; pointer-events: auto; }
+
+button {
+  font: inherit; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--panel-border); border-radius: 10px;
+  padding: 8px 14px; cursor: pointer;
+  transition: transform 0.08s ease, border-color 0.15s ease, background 0.15s ease;
+}
+button:hover { border-color: rgba(232, 228, 218, 0.4); }
+button:active { transform: scale(0.95); }
+button:focus-visible { outline: 2px solid var(--c3); outline-offset: 2px; }
+button.primary {
+  background: linear-gradient(135deg, var(--c0), #ff9068);
+  color: #200b08; font-weight: 700; border: none;
+  box-shadow: 0 4px 24px rgba(255, 107, 94, 0.35);
+}
+button.sq { width: 38px; height: 38px; padding: 0; font-size: 15px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; }
+button.sq.off { color: var(--muted); opacity: 0.6; }
+
+/* ------------------------------------------------------------- écrans */
+.screen {
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px; text-align: center;
+  background: radial-gradient(ellipse at 50% 42%, rgba(12,14,17,0.25) 0%, rgba(12,14,17,0.78) 78%);
+}
+.screen.hidden { display: none; }
+h1 {
+  font-size: clamp(38px, 9vw, 64px); font-weight: 800; letter-spacing: 0.24em;
+  margin-left: 0.24em; /* compense le letter-spacing final */
+  text-shadow: 0 2px 30px rgba(232, 228, 218, 0.18);
+}
+#homeTag { color: var(--muted); font-size: clamp(13px, 2.6vw, 16px); letter-spacing: 0.06em; max-width: 34em; }
+.howto { display: flex; flex-direction: column; gap: 5px; margin: 6px 0 2px; }
+.howto div { font-size: 13px; color: var(--muted); letter-spacing: 0.03em; }
+.howto b { color: var(--ink); font-weight: 600; }
+#homeBest { font-size: 13px; color: var(--muted); letter-spacing: 0.08em; font-variant-numeric: tabular-nums; }
+.bigrow { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+#btnPlay { font-size: 19px; padding: 13px 44px; border-radius: 14px; }
+.credit { position: absolute; bottom: calc(12px + env(safe-area-inset-bottom)); left: 0; right: 0;
+  font-size: 11px; color: var(--muted); letter-spacing: 0.06em; opacity: 0.8; }
+
+h2 { font-size: clamp(28px, 6vw, 42px); font-weight: 800; letter-spacing: 0.14em; margin-left: 0.14em; }
+#goScore { font-size: clamp(40px, 9vw, 62px); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+#goNew { color: var(--c1); font-weight: 700; letter-spacing: 0.12em; font-size: 14px; min-height: 18px; }
+.goStats { display: flex; gap: 26px; color: var(--muted); font-size: 13px; letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums; }
+.goStats b { color: var(--ink); display: block; font-size: 19px; margin-top: 2px; }
+.keyhint { font-size: 12px; color: var(--muted); letter-spacing: 0.08em; }
+
+#debug {
+  position: fixed; top: calc(64px + env(safe-area-inset-top)); left: 14px; z-index: 6;
+  font: 11px/1.4 ui-monospace, Consolas, monospace; color: var(--muted);
+  background: rgba(12,14,17,0.6); padding: 3px 7px; border-radius: 6px;
+  font-variant-numeric: tabular-nums; display: none; pointer-events: none;
+}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" style="display:none">
+  <div>
+    <div id="hudScore">0</div>
+    <div id="hudBest"></div>
+  </div>
+  <div id="hudRight">
+    <div id="hudLevel">LV 1</div>
+    <div id="hudBtns">
+      <button class="sq" id="btnSound" aria-label="sound">♪</button>
+      <button class="sq" id="btnMotion" aria-label="reduce motion">~</button>
+      <button class="sq" id="btnLang" aria-label="language">EN</button>
+      <button class="sq" id="btnPause" aria-label="pause">II</button>
+    </div>
+  </div>
+</div>
+<div id="debug"></div>
+
+<div class="screen" id="scrHome">
+  <h1>ACCRETION</h1>
+  <div id="homeTag"></div>
+  <div class="howto">
+    <div id="how1"></div>
+    <div id="how2"></div>
+    <div id="how3"></div>
+  </div>
+  <div id="homeBest"></div>
+  <div class="bigrow">
+    <button class="primary" id="btnPlay"></button>
+  </div>
+  <div class="bigrow">
+    <button class="sq" id="btnSound2">♪</button>
+    <button class="sq" id="btnMotion2">~</button>
+    <button class="sq" id="btnLang2">EN</button>
+  </div>
+  <div class="credit">A game by Z-Code · Concept: Cédric Bernadac</div>
+</div>
+
+<div class="screen hidden" id="scrPause">
+  <h2 id="pauseTitle"></h2>
+  <div class="bigrow">
+    <button class="primary" id="btnResume"></button>
+    <button id="btnRestart"></button>
+    <button id="btnHome"></button>
+  </div>
+  <div class="keyhint" id="pauseHint"></div>
+</div>
+
+<div class="screen hidden" id="scrOver">
+  <h2 id="goTitle"></h2>
+  <div id="goScore">0</div>
+  <div id="goNew"></div>
+  <div class="goStats">
+    <div><span id="goBestLbl"></span><b id="goBest">0</b></div>
+    <div><span id="goChainLbl"></span><b id="goChain">0</b></div>
+  </div>
+  <div class="bigrow">
+    <button class="primary" id="btnReplay"></button>
+    <button id="btnHome2"></button>
+  </div>
+  <div class="keyhint" id="goHint"></div>
+</div>
+
+<script>
+'use strict';
+/* ===================================================================== */
+/* ACCRETION — Z Code, 31 octobre 2026.                                  */
+/* Jeu statique autonome : Canvas 2D + Web Audio, aucun asset externe.   */
+/*                                                                       */
+/* Modèle : planète = 12 secteurs × 8 couches max. Les débris se posent  */
+/* sur la couche libre la plus basse de leur secteur (les trous issus   */
+/* des comètes / noyaux instables persistent). Un anneau complet         */
+/* explose ; à chaque explosion, chaque colonne se compacte (gravité),  */
+/* ce qui peut compléter d'autres anneaux : la cascade. La cascade est   */
+/* donc la profondeur du trou refermé — c'est le cœur du jeu.            */
+/* ===================================================================== */
+
+/* ============================ CONFIG ================================= */
+/* Toutes les valeurs de réglage sont regroupées ici. */
+const CFG = {
+  sectors: 12,
+  maxRings: 8,
+  ringsPerLevel: 8,              // un niveau tous les 8 anneaux explosés
+  metrics: {                     // fractions de min(w, h)
+    core: 0.085, ringW: 0.033, entry: 0.46
+  },
+  rotation: {                    // rad/s, rad/s²
+    accel: 55, maxSpeed: 9, decay: 10, magnetSpeed: 2.6, magnetGain: 9
+  },
+  touch: { dragGain: 0.011, tapMaxMs: 190, tapMaxDist: 12 },
+  debris: {
+    boostMult: 2.6, boostPoints: 5,
+    phaseADur: 1.35,             // s à vitesse 1
+    diveV0: 0.26, diveAcc: 0.5,  // fractions de min(w,h) par s
+    trail: 7
+  },
+  difficulty: {
+    baseInterval: 2.2, minInterval: 0.6, ringDecay: 0.91
+  },
+  specials: {                    // niveaux d'apparition et probabilités
+    barLevel: 2, barChance: 0.18,
+    cometLevel: 3, cometChance: 0.08,
+    unstableLevel: 4, unstableChance: 0.10
+  },
+  score: { ringBase: 100, pureMult: 3 },
+  fx: {
+    shakeBase: 4, shakePerChain: 2.6, shakeMax: 22,
+    slowMoThreshold: 3, slowMoDur: 0.3, slowMoScale: 0.35,
+    chainStepDelay: 0.24
+  },
+  colors: ['#ff6b5e', '#ffc247', '#51d88b', '#5aa9ff', '#ff7ab8'],
+  patterns: ['dot', 'stripe', 'tri', 'ring', 'cross'],
+  unstableColor: '#454a56',
+  danger: '#e5484d',
+  maxParticles: 420
+};
+
+/* ======================= CORE (logique pure) ========================= */
+/* Section sans DOM, extractible pour les tests Node (marqueurs ci-dessous). */
+/*__CORE_START__*/
+const CORE = (() => {
+  const TAU = Math.PI * 2;
+  const mod = (a, n) => ((a % n) + n) % n;
+
+  function createGrid(n, maxRing) {
+    return { n, maxRing, cols: Array.from({ length: n }, () => Array(maxRing).fill(null)), gid: 0 };
+  }
+  const has = (g, s, l) => !!g.cols[s][l - 1];
+  const at = (g, s, l) => g.cols[s][l - 1];
+  function lowestFree(g, s) {
+    for (let l = 1; l <= g.maxRing; l++) if (!has(g, s, l)) return l;
+    return g.maxRing + 1;                       // 9 = dépassement (=défaite)
+  }
+  function topmost(g, s) {
+    for (let l = g.maxRing; l >= 1; l--) if (has(g, s, l)) return l;
+    return 0;
+  }
+  function maxLevel(g) {
+    let m = 0;
+    for (let s = 0; s < g.n; s++) m = Math.max(m, topmost(g, s));
+    return m;
+  }
+  function sectorOf(theta, rot, n) {
+    return mod(Math.floor((theta - rot) / (TAU / n)), n);
+  }
+  function ringComplete(g, l) {
+    for (let s = 0; s < g.n; s++) if (!has(g, s, l)) return false;
+    return true;
+  }
+  function completeRings(g) {
+    const out = [];
+    for (let l = 1; l <= g.maxRing; l++) if (ringComplete(g, l)) out.push(l);
+    return out;                                  // trié croissant
+  }
+  function place(g, s, color) {
+    const l = lowestFree(g, s);
+    const b = { id: ++g.gid, color, sector: s, level: l };
+    g.cols[s][l - 1] = b;
+    return b;
+  }
+  function cometHit(g, s) {
+    const l = topmost(g, s);
+    if (!l) return null;                         // secteur vide : souffle sur le noyau
+    const b = at(g, s, l);
+    g.cols[s][l - 1] = null;
+    return { level: l, block: b };
+  }
+  function unstablePlace(g, s, color) {
+    if (lowestFree(g, s) > g.maxRing) return { overflow: true };
+    const b = place(g, s, color);
+    const destroyed = [];
+    for (const d of [-1, 1]) {
+      const t = mod(s + d, g.n);
+      if (has(g, t, b.level)) {
+        const v = at(g, t, b.level);
+        g.cols[t][b.level - 1] = null;
+        destroyed.push(v);
+      }
+    }
+    return { overflow: false, block: b, destroyed };
+  }
+  /* Explose l'anneau l (doit être complet) : retire ses 12 blocs, puis
+     compacte chaque colonne entière (gravité). Retourne l'événement. */
+  function explodeRing(g, l) {
+    const blocks = [], colors = [];
+    for (let s = 0; s < g.n; s++) {
+      const b = at(g, s, l);
+      colors.push(b.color);
+      blocks.push(b);
+      g.cols[s][l - 1] = null;
+    }
+    const pure = colors.every(c => c === colors[0]);
+    const falls = [];
+    for (let s = 0; s < g.n; s++) {
+      const run = [];
+      for (let j = 1; j <= g.maxRing; j++) {
+        const b = g.cols[s][j - 1];
+        if (b) run.push({ b, from: j });
+      }
+      g.cols[s].fill(null);
+      run.forEach((e, i) => {
+        g.cols[s][i] = e.b;
+        e.b.sector = s; e.b.level = i + 1;
+        if (e.from !== i + 1) falls.push({ block: e.b, from: e.from, to: i + 1 });
+      });
+    }
+    return { level: l, pure, colorIdx: colors[0], blocks, falls };
+  }
+  /* Un pas de cascade : explose l'anneau complet le plus externe, ou null. */
+  function cascadeStep(g) {
+    const rings = completeRings(g);
+    if (!rings.length) return null;
+    return explodeRing(g, rings[rings.length - 1]);
+  }
+  /* Score d'une explosion : 100 × couche ; ×n pour le n-ième anneau de la
+     chaîne ; ×3 si anneau pur. */
+  function scoreStep(level, chainPos, pure, sc) {
+    let v = sc.ringBase * level;
+    if (chainPos > 1) v *= chainPos;
+    if (pure) v *= sc.pureMult;
+    return v;
+  }
+  /* Courbe de difficulté. Les débris arrivent en SALVES simultanées dont la
+     taille croît avec les anneaux nettoyés (1 → 3, spéc. « simultanés en
+     approche ») ; l'intervalle de base resserre en continu (~0,6 s atteint
+     vers 5-6 min). Les TYPES restent gérés par niveau (1 niveau = 8 anneaux). */
+  const intervalFor = (rings, d) => Math.max(d.minInterval, d.baseInterval * Math.pow(d.ringDecay, rings));
+  const burstFor = rings => (rings < 6 ? 1 : rings < 14 ? 2 : 3);
+  const colorsFor = rings => (rings < 14 ? 3 : rings < 24 ? 4 : 5);
+  const speedFor = rings => Math.min(2, 1 + rings * 0.035);
+  const levelForRings = (rings, per) => 1 + Math.floor(rings / per);
+  /* Type d'un nouveau débris selon le niveau ; chaque type verrouillé rend
+     sa plage aux débris simples (pas à la barre). */
+  function pickSpawnType(lv, sp, rng) {
+    const r = rng();
+    let acc = 0;
+    if (lv >= sp.cometLevel) { acc += sp.cometChance; if (r < acc) return 'comet'; }
+    if (lv >= sp.unstableLevel) { acc += sp.unstableChance; if (r < acc) return 'unstable'; }
+    if (lv >= sp.barLevel) { acc += sp.barChance; if (r < acc) return 'bar'; }
+    return 'simple';
+  }
+  /* Arcs d'arrivée (angles centraux) selon le niveau : un côté, deux, partout. */
+  function spawnArcs(lv) {
+    if (lv <= 1) return [[-Math.PI / 2, 0.96]];               // [centre, demi-largeur]
+    if (lv <= 3) return [[-Math.PI / 2, 1.22], [Math.PI / 2, 1.22]];
+    return [[0, Math.PI]];                                     // tout autour
+  }
+
+  return {
+    TAU, mod, createGrid, has, at, lowestFree, topmost, maxLevel, sectorOf,
+    ringComplete, completeRings, place, cometHit, unstablePlace, explodeRing,
+    cascadeStep, scoreStep, intervalFor, burstFor, colorsFor, speedFor,
+    levelForRings, pickSpawnType, spawnArcs
+  };
+})();
+/*__CORE_END__*/
+
+/* ============================== i18n ================================= */
+/*__I18N_START__*/
+const I18N = {
+  en: {
+    tag: 'Spin the planet. Catch the debris. Close full rings before they pass the red line.',
+    how1: '<b>← →</b> or <b>A D</b> — spin the planet <b>·</b> drag on touch',
+    how2: '<b>↓ S Space</b> — pull the nearest debris <b>·</b> tap on touch',
+    how3: 'A full ring explodes and everything falls. Past the red line, it’s over.',
+    play: 'Play', best: 'BEST', level: 'LV',
+    paused: 'PAUSED', resume: 'Resume', restart: 'Restart', home: 'Home',
+    pauseHint: 'P / Esc to resume',
+    gameover: 'GAME OVER', replay: 'Replay', newBest: 'NEW BEST!',
+    goBestLbl: 'BEST', goChainLbl: 'LONGEST CHAIN', goHint: 'Enter / Space to replay',
+    tutSpin: '← →  or  drag — spin the planet',
+    tutMarker: 'the marker shows the landing slot',
+    tutGap: 'fill the gap to close the ring',
+    tutBoost: 'Space or tap — pull the debris',
+    tutRing: 'full rings explode!',
+    tutUnstable: 'unstable core: it shatters its neighbors — save those gaps!',
+    pure: 'PURE RING', chain: 'CHAIN', levelUp: 'LEVEL',
+    soundOn: 'Sound on', soundOff: 'Sound off',
+    motionOn: 'Reduce motion: on', motionOff: 'Reduce motion: off'
+  },
+  fr: {
+    tag: 'Faites tourner la planète, rattrapez les débris, fermez des anneaux complets avant la ligne rouge.',
+    how1: '<b>← →</b> ou <b>A D</b> — tourner la planète <b>·</b> glisser au doigt',
+    how2: '<b>↓ S Espace</b> — attirer le débris le plus proche <b>·</b> toucher brièvement',
+    how3: 'Un anneau complet explose et tout retombe. Au-delà de la ligne rouge, c’est fini.',
+    play: 'Jouer', best: 'RECORD', level: 'NV',
+    paused: 'PAUSE', resume: 'Reprendre', restart: 'Recommencer', home: 'Accueil',
+    pauseHint: 'P / Échap pour reprendre',
+    gameover: 'PARTIE TERMINÉE', replay: 'Rejouer', newBest: 'NOUVEAU RECORD !',
+    goBestLbl: 'RECORD', goChainLbl: 'PLUS LONGUE CHAÎNE', goHint: 'Entrée / Espace pour rejouer',
+    tutSpin: '← →  ou  glisser — tournez la planète',
+    tutMarker: 'le marqueur montre la case d’atterrissage',
+    tutGap: 'bouchez le trou pour fermer l’anneau',
+    tutBoost: 'Espace ou touche — attirez le débris',
+    tutRing: 'les anneaux complets explosent !',
+    tutUnstable: 'noyau instable : il brise ses voisins — gardez ces trous !',
+    pure: 'ANNEAU PUR', chain: 'CHAÎNE', levelUp: 'NIVEAU',
+    soundOn: 'Son activé', soundOff: 'Son coupé',
+    motionOn: 'Mouvements réduits : oui', motionOff: 'Mouvements réduits : non'
+  },
+  es: {
+    tag: 'Gira el planeta, atrapa los escombros y cierra anillos completos antes de la línea roja.',
+    how1: '<b>← →</b> o <b>A D</b> — girar el planeta <b>·</b> arrastra con el dedo',
+    how2: '<b>↓ S Espacio</b> — atraer el escombro más cercano <b>·</b> toca brevemente',
+    how3: 'Un anillo completo explota y todo cae. Más allá de la línea roja, se acaba.',
+    play: 'Jugar', best: 'RÉCORD', level: 'NV',
+    paused: 'PAUSA', resume: 'Continuar', restart: 'Reiniciar', home: 'Inicio',
+    pauseHint: 'P / Esc para continuar',
+    gameover: 'FIN DEL JUEGO', replay: 'Repetir', newBest: '¡NUEVO RÉCORD!',
+    goBestLbl: 'RÉCORD', goChainLbl: 'CADENA MÁS LARGA', goHint: 'Enter / Espacio para repetir',
+    tutSpin: '← →  o  arrastra — gira el planeta',
+    tutMarker: 'la marca muestra la casilla de aterrizaje',
+    tutGap: 'rellena el hueco para cerrar el anillo',
+    tutBoost: 'Espacio o toca — atrae el escombro',
+    tutRing: '¡los anillos completos explotan!',
+    tutUnstable: 'núcleo inestable: rompe a sus vecinos… ¡guarda esos huecos!',
+    pure: 'ANILLO PURO', chain: 'CADENA', levelUp: 'NIVEL',
+    soundOn: 'Sonido activado', soundOff: 'Sonido desactivado',
+    motionOn: 'Movimiento reducido: sí', motionOff: 'Movimiento reducido: no'
+  }
+};
+/*__I18N_END__*/
+
+/* =========================== stockage sûr ============================ */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* illisible : on ignore */ } }
+};
+const K = { best: 'accretion.best', chain: 'accretion.chain', lang: 'accretion.lang', sound: 'accretion.sound', motion: 'accretion.motion', tut: 'accretion.tut' };
+
+/* ============================== état ================================= */
+const S = { HOME: 0, PLAY: 1, PAUSE: 2, OVER: 3 };
+const G = {
+  state: S.HOME,
+  grid: null,
+  rot: 0, rotV: 0, holding: 0, totalRot: 0,
+  score: 0, best: 0, bestChain: 0, ringsCleared: 0, level: 1,
+  longestChain: 0,
+  debris: [], spawnTimer: 1.2, debrisCount: 0,
+  chain: { active: false, pos: 0, timer: 0 },
+  time: 0, timeScale: 1, slowT: 0, unstableSeen: false,
+  shake: 0, dangerPulse: 0,
+  firstColorCount: 3,
+  tut: { active: false, done: store.get(K.tut, false), ringClosed: false, boostHinted: false, hintSpin: true, t: 0 },
+  lang: 'en', sound: true, reduceMotion: false,
+  ambient: [], ambientTimer: 0.5
+};
+if (['fr', 'es'].includes(store.get(K.lang, ''))) G.lang = store.get(K.lang, 'en');
+else { try { const l = (navigator.language || 'en').slice(0, 2).toLowerCase(); if (l === 'fr' || l === 'es') G.lang = l; } catch (e) { /* pas de navigator : EN */ } }
+G.sound = store.get(K.sound, true);
+G.reduceMotion = store.get(K.motion, null);
+if (G.reduceMotion === null) {
+  G.reduceMotion = false;
+  try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) G.reduceMotion = true; } catch (e) { /* ignoré */ }
+}
+G.best = store.get(K.best, 0);
+G.bestChain = store.get(K.chain, 0);
+
+const T = k => I18N[G.lang][k];
+
+/* ============================== audio ================================ */
+const AU = (() => {
+  let ctx = null, master = null, alarmGain = null, alarmOsc = null;
+  function ensure() {
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); return true; }
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = G.sound ? 0.5 : 0;
+      master.connect(ctx.destination);
+      return true;
+    } catch (e) { return false; }
+  }
+  const now = () => ctx.currentTime;
+  function tone(freq, dur, type, vol, slideTo, delay) {
+    if (!ctx || !G.sound) return;
+    try {
+      const t0 = now() + (delay || 0);
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type || 'triangle';
+      o.frequency.setValueAtTime(freq, t0);
+      if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(30, slideTo), t0 + dur);
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(vol, t0 + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0008, t0 + dur);
+      o.connect(g); g.connect(master);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    } catch (e) { /* audio indisponible : silencieux */ }
+  }
+  function noise(dur, vol, freq, delay) {
+    if (!ctx || !G.sound) return;
+    try {
+      const t0 = now() + (delay || 0);
+      const n = Math.floor(ctx.sampleRate * dur);
+      const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq || 900; f.Q.value = 0.8;
+      const g = ctx.createGain(); g.gain.value = vol;
+      src.connect(f); f.connect(g); g.connect(master);
+      src.start(t0);
+    } catch (e) { /* ignoré */ }
+  }
+  const SCALE = [0, 2, 4, 7, 9, 12, 14, 16];   // pentatonique majeure
+  const NOTE0 = 261.63;                         // C4
+  const nf = i => NOTE0 * Math.pow(2, SCALE[Math.min(i, SCALE.length - 1)] / 12);
+  return {
+    ensure,
+    land() { noise(0.06, 0.5, 700); tone(170, 0.09, 'sine', 0.35, 90); },
+    boost() { tone(300, 0.1, 'square', 0.12, 760); },
+    ring(pos, level) {
+      tone(nf(pos - 1), 0.22, 'triangle', 0.30, null);
+      tone(nf(pos - 1) * 2, 0.18, 'sine', 0.10, null);
+      noise(0.2, 0.28, 500 + level * 90);
+    },
+    pure() { [12, 16, 19, 24].forEach((s, i) => tone(NOTE0 * Math.pow(2, s / 12), 0.16, 'sine', 0.14, null, i * 0.055)); },
+    comet() { noise(0.16, 0.4, 2100); tone(880, 0.14, 'sawtooth', 0.1, 200); },
+    boom() { noise(0.3, 0.5, 300); tone(120, 0.35, 'sine', 0.4, 45); },
+    over() { [nf(4), nf(2), nf(0)].forEach((f, i) => tone(f / 2, 0.3, 'triangle', 0.22, null, i * 0.17)); },
+    levelUp() { tone(nf(3), 0.12, 'triangle', 0.16); tone(nf(5), 0.14, 'triangle', 0.16, null, 0.1); },
+    ui() { tone(760, 0.05, 'sine', 0.08); },
+    alarmTick(on) {
+      if (!ctx || !G.sound) return;
+      try {
+        if (on && !alarmOsc) {
+          alarmOsc = ctx.createOscillator(); alarmGain = ctx.createGain();
+          alarmOsc.type = 'sine'; alarmOsc.frequency.value = 97;
+          alarmGain.gain.value = 0;
+          alarmOsc.connect(alarmGain); alarmGain.connect(master);
+          alarmOsc.start();
+        } else if (!on && alarmOsc) {
+          alarmGain.gain.value = 0;
+          alarmOsc.stop(now() + 0.05); alarmOsc = null; alarmGain = null;
+        }
+        if (on && alarmGain) {
+          const p = 0.5 + 0.5 * Math.sin(G.time * Math.PI * 2 * 1.3);
+          alarmGain.gain.value = 0.035 * p * p;
+        }
+      } catch (e) { /* ignoré */ }
+    },
+    setMuted(m) { if (master) master.gain.value = m ? 0 : 0.5; }
+  };
+})();
+
+/* ============================== rendu ================================ */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1, M = 0, CX = 0, CY = 0;
+let coreR = 0, ringW = 0, redR = 0, entryR = 0;
+const SEC = CORE.TAU / CFG.sectors;
+const GAP_A = 0.035;   // vide angulaire entre blocs (rad)
+const GAP_R = 0.06;    // vide radial (fraction de ringW)
+
+function edgeDist(theta) {
+  // distance du centre au bord de l'écran dans la direction theta
+  const c = Math.cos(theta), s = Math.sin(theta);
+  const tx = c !== 0 ? (W / 2) / Math.abs(c) : Infinity;
+  const ty = s !== 0 ? (H / 2) / Math.abs(s) : Infinity;
+  return Math.min(tx, ty);
+}
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  M = Math.min(W, H); CX = W / 2; CY = H / 2;
+  coreR = M * CFG.metrics.core; ringW = M * CFG.metrics.ringW;
+  redR = coreR + CFG.maxRings * ringW; entryR = M * CFG.metrics.entry;
+  initStars();
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+
+/* étoiles */
+let stars = [];
+function initStars() {
+  stars = [];
+  const n = Math.round((W * H) / 16000);
+  for (let i = 0; i < n; i++) {
+    stars.push({ x: Math.random() * W, y: Math.random() * H, z: 0.3 + Math.random() * 0.7, tw: Math.random() * CORE.TAU });
+  }
+}
+
+/* particules & popups */
+const parts = [];
+function burst(x, y, color, n, spd, life) {
+  for (let i = 0; i < n; i++) {
+    if (parts.length >= CFG.maxParticles) parts.shift();
+    const a = Math.random() * CORE.TAU, v = spd * (0.35 + Math.random() * 0.9);
+    parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, r: 1.5 + Math.random() * 2.5, color, life: life * (0.6 + Math.random() * 0.7), t: 0 });
+  }
+}
+const popups = [];
+function popup(text, x, y, color, size) {
+  popups.push({ text, x, y, color, size: size || 20, t: 0, life: 1.0 });
+}
+
+/* sprites de blocs (animation visuelle, parallèle à la grille) */
+const sprites = new Map();   // id bloc -> { vLevel, born, squash }
+function syncSprites() {
+  const seen = new Set();
+  if (G.grid) {
+    for (let s = 0; s < G.grid.n; s++) for (let l = 1; l <= G.grid.maxRing; l++) {
+      const b = CORE.at(G.grid, s, l);
+      if (!b) continue;
+      seen.add(b.id);
+      if (!sprites.has(b.id)) sprites.set(b.id, { vLevel: l, born: G.time, squash: 0.12 });
+    }
+  }
+  for (const id of [...sprites.keys()]) if (!seen.has(id)) sprites.delete(id);
+}
+
+/* ============================ géométrie ============================== */
+const levelR = l => coreR + l * ringW;                    // bord externe de la couche l
+const slotAngle = (s, rot) => rot + (s + 0.5) * SEC;
+
+function drawBlock(b, rotOverride) {
+  const sp = sprites.get(b.id);
+  const lv = sp ? sp.vLevel : b.level;
+  const rot = rotOverride === undefined ? G.rot : rotOverride;
+  const a0 = rot + b.sector * SEC + GAP_A;
+  const a1 = rot + (b.sector + 1) * SEC - GAP_A;
+  const squash = sp && sp.squash > 0 ? sp.squash : 0;
+  const r1 = levelR(lv) - GAP_R * ringW - squash * ringW;
+  const r0 = levelR(lv - 1) + GAP_R * ringW;
+  if (r1 <= r0) return;
+  const isUnstable = b.unstable;
+  const base = isUnstable ? CFG.unstableColor : CFG.colors[b.color];
+  ctx.beginPath();
+  ctx.arc(CX, CY, r1, a0, a1);
+  ctx.arc(CX, CY, r0, a1, a0, true);
+  ctx.closePath();
+  ctx.fillStyle = base;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(12,14,17,0.55)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // léger éclat sur le bord externe
+  ctx.beginPath();
+  ctx.arc(CX, CY, r1 - 1.2, a0 + 0.02, a1 - 0.02);
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+  // motif (lisibilité daltonienne) — et glyphe d'avertissement pour l'instable
+  const am = rot + (b.sector + 0.5) * SEC, rm = (r0 + r1) / 2;
+  const px = CX + Math.cos(am) * rm, py = CY + Math.sin(am) * rm;
+  ctx.save();
+  ctx.translate(px, py); ctx.rotate(am);
+  const g = ringW * 0.42;
+  ctx.fillStyle = ctx.strokeStyle = 'rgba(12,14,17,0.72)';
+  if (isUnstable) { // petit triangle d'alerte
+    ctx.beginPath();
+    ctx.moveTo(0, -g * 0.8); ctx.lineTo(g * 0.7, g * 0.55); ctx.lineTo(-g * 0.7, g * 0.55);
+    ctx.closePath(); ctx.fillStyle = '#ffd75e'; ctx.fill();
+  } else switch (CFG.patterns[b.color]) {
+    case 'dot':
+      ctx.beginPath(); ctx.arc(0, 0, g * 0.52, 0, CORE.TAU); ctx.fill(); break;
+    case 'stripe':
+      ctx.fillRect(-g, -g * 0.28, 2 * g, g * 0.56); break;
+    case 'tri':
+      ctx.beginPath(); ctx.moveTo(0, -g * 0.72); ctx.lineTo(g * 0.66, g * 0.5); ctx.lineTo(-g * 0.66, g * 0.5);
+      ctx.closePath(); ctx.fill(); break;
+    case 'ring':
+      ctx.beginPath(); ctx.arc(0, 0, g * 0.5, 0, CORE.TAU);
+      ctx.lineWidth = g * 0.3; ctx.stroke(); break;
+    case 'cross':
+      ctx.fillRect(-g * 0.75, -g * 0.2, 1.5 * g, g * 0.4);
+      ctx.fillRect(-g * 0.2, -g * 0.75, g * 0.4, 1.5 * g); break;
+  }
+  ctx.restore();
+}
+
+/* ============================= débris ================================ */
+let debrisGid = 0;
+function spawnDebris(opts) {
+  if (G.state !== S.PLAY) return;
+  const lv = G.level, rings = G.ringsCleared;
+  const type = (opts && opts.type) || CORE.pickSpawnType(lv, CFG.specials, Math.random);
+  const arcs = CORE.spawnArcs(lv);
+  const arc = arcs[Math.floor(Math.random() * arcs.length)];
+  const th1 = arc[0] + (Math.random() * 2 - 1) * arc[1];
+  const th2 = th1 + SEC;
+  const speed = CORE.speedFor(rings);
+  const ncol = CORE.colorsFor(rings);
+  const color = Math.floor(Math.random() * ncol);
+  const th0 = th1 + (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.6);
+  const r0 = edgeDist(th0) + 24;
+  const dist = Math.max(1, r0 - entryR);
+  const d = {
+    id: ++debrisGid, type, color,
+    thetas: type === 'bar' ? [th1, th2] : [th1],
+    th0,
+    r0, r: r0, phase: 'A', tA: 0,
+    TA: (CFG.debris.phaseADur / speed) * Math.min(1.4, Math.max(0.6, dist / (M * 0.36))),
+    v: M * CFG.debris.diveV0 * speed,
+    boost: 1, boosted: false,
+    trail: [], x: 0, y: 0,
+    tutFirst: !!(opts && opts.tutFirst)
+  };
+  if (opts && opts.tutFirst) d.color = 0;
+  G.debris.push(d);
+  G.debrisCount++;
+}
+function debrisSectors(d) {
+  // secteurs visés ; la barre est structurellement adjacente (jamais deux
+  // fois la même colonne, même sur une frontière exacte de secteur)
+  const s0 = CORE.sectorOf(d.thetas[0], G.rot, CFG.sectors);
+  return d.type === 'bar' ? [s0, (s0 + 1) % CFG.sectors] : [s0];
+}
+function debrisSlots(d) {
+  // emplacements visés, recalculés en direct (équité)
+  return debrisSectors(d).map(s => {
+    if (d.type === 'comet') {
+      const l = CORE.topmost(G.grid, s);
+      return { sector: s, level: l || 1, cometEmpty: l === 0 };
+    }
+    const l = CORE.lowestFree(G.grid, s);
+    return { sector: s, level: l, overflow: l > CFG.maxRings };
+  });
+}
+function updateDebris(dt) {
+  for (let i = G.debris.length - 1; i >= 0; i--) {
+    const d = G.debris[i];
+    const slots = debrisSlots(d);
+    // rayon d'atterrissage : bord externe du slot le plus haut visé (ou ligne rouge)
+    let landR = 0;
+    for (const sl of slots) landR = Math.max(landR, sl.overflow ? redR : levelR(sl.level));
+    if (d.phase === 'A') {
+      d.tA += dt * d.boost;
+      const f = Math.min(1, d.tA / d.TA);
+      d.r = d.r0 + (entryR - d.r0) * f * f;
+      if (f >= 1) d.phase = 'B';
+    } else {
+      d.r -= d.v * dt * d.boost;
+      d.v += M * CFG.debris.diveAcc * dt * d.boost;
+    }
+    // position : angle cible fixe (le marqueur est donc toujours exact)
+    const thm = d.thetas.length === 2
+      ? Math.atan2(Math.sin(d.thetas[0]) + Math.sin(d.thetas[1]), Math.cos(d.thetas[0]) + Math.cos(d.thetas[1]))
+      : d.thetas[0];
+    let th;
+    if (d.phase === 'A') {
+      const f = Math.min(1, d.tA / d.TA);
+      const sm = f * f * (3 - 2 * f);
+      th = d.th0 + (thm - d.th0) * sm;
+    } else th = thm;
+    d.x = CX + Math.cos(th) * d.r;
+    d.y = CY + Math.sin(th) * d.r;
+    d.trail.unshift({ x: d.x, y: d.y });
+    if (d.trail.length > CFG.debris.trail) d.trail.pop();
+    if (d.r <= landR + ringW * 0.4) {
+      G.debris.splice(i, 1);
+      landDebris(d, slots);
+      if (G.state !== S.PLAY) return;
+    }
+  }
+}
+function landDebris(d, slots) {
+  if (d.type === 'comet') {
+    const sl = slots[0];
+    const ev = CORE.cometHit(G.grid, sl.sector);
+    AU.comet();
+    if (ev) {
+      burst(CX + Math.cos(slotAngle(sl.sector, G.rot)) * levelR(ev.level - 0.5),
+            CY + Math.sin(slotAngle(sl.sector, G.rot)) * levelR(ev.level - 0.5),
+            CFG.colors[ev.block.color], 14, M * 0.28, 0.5);
+      syncSprites();
+    } else {
+      burst(d.x, d.y, '#ffd9b0', 8, M * 0.18, 0.35);
+    }
+    return;                                     // une comète ne déclenche jamais d'anneau
+  }
+  if (slots.some(sl => sl.overflow)) { gameOver(d); return; }
+  if (d.type === 'unstable') {
+    const ev = CORE.unstablePlace(G.grid, debrisSectors(d)[0], d.color);
+    ev.block.unstable = true;
+    if (!G.unstableSeen) { G.unstableSeen = true; banner(T('tutUnstable')); }
+    for (const v of ev.destroyed) {
+      burst(CX + Math.cos(slotAngle(v.sector, G.rot)) * levelR(v.level - 0.5),
+            CY + Math.sin(slotAngle(v.sector, G.rot)) * levelR(v.level - 0.5),
+            CFG.colors[v.color], 12, M * 0.24, 0.45);
+    }
+    if (ev.destroyed.length) { AU.boom(); addShake(3); }
+  } else {
+    for (const s of debrisSectors(d)) CORE.place(G.grid, s, d.color);
+  }
+  AU.land();
+  addShake(1.2);
+  syncSprites();
+  const sp = sprites.get(CORE.at(G.grid, slots[0].sector, slots[0].level).id);
+  if (sp) sp.squash = 0.14;
+  checkChain(d);
+}
+function boostNearest() {
+  let best = null, bestD = Infinity;
+  for (const d of G.debris) {
+    const dist = d.r - entryR;
+    if (dist < bestD && !d.boosted) { bestD = dist; best = d; }
+  }
+  if (!best) return;
+  best.boost = CFG.debris.boostMult;
+  best.boosted = true;
+  G.score += CFG.debris.boostPoints;
+  AU.boost();
+  refreshHud();
+}
+
+/* ============================ cascades =============================== */
+function checkChain() {
+  if (G.chain.active) return;
+  if (!CORE.completeRings(G.grid).length) return;
+  G.chain.active = true;
+  G.chain.pos = 0;
+  chainStep();
+}
+function chainStep() {
+  const ev = CORE.cascadeStep(G.grid);
+  if (!ev) {
+    G.chain.active = false;
+    return;
+  }
+  G.chain.pos++;
+  const pos = G.chain.pos;
+  const pts = CORE.scoreStep(ev.level, pos, ev.pure, CFG.score);
+  G.score += pts;
+  G.ringsCleared++;
+  const newLevel = CORE.levelForRings(G.ringsCleared, CFG.ringsPerLevel);
+  if (newLevel !== G.level) {
+    G.level = newLevel;
+    AU.levelUp();
+    banner(T('levelUp') + ' ' + G.level);
+  }
+  G.longestChain = Math.max(G.longestChain, pos);
+  // effets
+  const ringMid = levelR(ev.level - 0.5);
+  AU.ring(pos, ev.level);
+  addShake(CFG.fx.shakeBase + CFG.fx.shakePerChain * Math.min(pos, 6));
+  if (!G.reduceMotion && pos >= CFG.fx.slowMoThreshold) G.slowT = CFG.fx.slowMoDur;
+  for (const b of ev.blocks) {
+    const a = slotAngle(b.sector, G.rot);
+    burst(CX + Math.cos(a) * ringMid, CY + Math.sin(a) * ringMid, CFG.colors[b.color], 7, M * 0.3, 0.55);
+  }
+  const aTrig = G.rot + (Math.floor(CORE.TAU / 4 / SEC) * SEC + SEC / 2); // ~ angle du déclencheur
+  popup('+' + pts, CX + Math.cos(aTrig) * ringMid, CY + Math.sin(aTrig) * ringMid - 14, CFG.colors[ev.colorIdx], pos > 1 ? 15 + pos * 4 : 18);
+  if (pos >= 2) popup(T('chain') + ' ×' + pos, CX, CY - redR * 0.55, '#e8e4da', 15 + pos * 2.5);
+  if (ev.pure) {
+    AU.pure();
+    popup(T('pure'), CX, CY - redR * 0.8, CFG.colors[ev.colorIdx], 22);
+    waves.push({ r: ringMid, a: 0, color: CFG.colors[ev.colorIdx] });
+  }
+  flashes.push({ r: levelR(ev.level), t: 0, color: CFG.colors[ev.colorIdx] });
+  syncSprites();
+  for (const f of ev.falls) {
+    const sp = sprites.get(f.block.id);
+    if (sp) sp.squash = 0.1;
+  }
+  G.chain.timer = CFG.fx.chainStepDelay;
+  if (G.tut.active && !G.tut.ringClosed) {
+    G.tut.ringClosed = true;
+    G.tut.done = true; store.set(K.tut, true);
+    banner(T('tutRing'));
+  }
+}
+const waves = [];   // onde d'anneau pur
+const flashes = []; // éclair d'explosion
+let bannerText = null;
+
+function banner(text) { bannerText = { text, t: 0 }; }
+function addShake(m) { if (!G.reduceMotion) G.shake = Math.min(CFG.fx.shakeMax, G.shake + m); }
+
+/* ========================= cycle de partie =========================== */
+function newGame() {
+  G.grid = CORE.createGrid(CFG.sectors, CFG.maxRings);
+  sprites.clear();
+  G.rot = 0; G.rotV = 0; G.totalRot = 0;
+  G.score = 0; G.ringsCleared = 0; G.level = 1; G.longestChain = 0;
+  G.debris = []; G.debrisCount = 0; G.spawnTimer = 1.4;
+  G.chain = { active: false, pos: 0, timer: 0 };
+  G.slowT = 0; G.timeScale = 1; G.shake = 0;
+  parts.length = 0; popups.length = 0; waves.length = 0; flashes.length = 0;
+  bannerText = null;
+  G.tut.active = !G.tut.done;
+  G.tut.ringClosed = false; G.tut.boostHinted = false; G.tut.hintSpin = true; G.tut.t = 0;
+  if (G.tut.active) {
+    // anneau 1 prérempli à 11 secteurs, même couleur ; le 1er débris assorti
+    // refermera l'anneau (pur) si le joueur vise le trou.
+    const empty = Math.floor(Math.random() * CFG.sectors);
+    for (let s = 0; s < CFG.sectors; s++) if (s !== empty) CORE.place(G.grid, s, 0);
+    G.tutEmpty = empty;
+    G.spawnTimer = 1.2;
+  }
+  G.state = S.PLAY;
+  showScreen(null);
+  hud.style.display = 'flex';
+  refreshHud();
+}
+function gameOver(d) {
+  G.state = S.OVER;
+  AU.over();
+  AU.alarmTick(false);
+  addShake(12);
+  if (d) burst(d.x, d.y, CFG.danger, 26, M * 0.34, 0.7);
+  const isNew = G.score > G.best;
+  if (isNew) { G.best = G.score; store.set(K.best, G.best); }
+  if (G.longestChain > G.bestChain) { G.bestChain = G.longestChain; store.set(K.chain, G.bestChain); }
+  document.getElementById('goScore').textContent = G.score;
+  document.getElementById('goNew').textContent = isNew && G.score > 0 ? T('newBest') : '';
+  document.getElementById('goBest').textContent = G.best;
+  document.getElementById('goChain').textContent = '×' + G.longestChain;
+  showScreen('scrOver');
+}
+
+/* ============================ mise à jour ============================ */
+function update(dt) {
+  G.time += dt;
+  // échelle de temps (ralenti de cascade)
+  if (G.slowT > 0) {
+    G.slowT -= dt;
+    G.timeScale = CFG.fx.slowMoScale;
+  } else {
+    G.timeScale += (1 - G.timeScale) * Math.min(1, dt * 6);
+  }
+  const wdt = dt * G.timeScale;
+
+  if (G.state === S.PLAY) {
+    // rotation
+    updateRotation(dt);
+    // apparitions : salves simultanées (1 → 3 selon les anneaux nettoyés)
+    G.spawnTimer -= wdt;
+    if (G.spawnTimer <= 0 && G.debris.length === 0) {
+      const K = G.tut.active ? 1 : CORE.burstFor(G.ringsCleared);
+      for (let i = 0; i < K; i++) {
+        const opts = (G.tut.active && G.debrisCount === 0 && i === 0) ? { type: 'simple', tutFirst: true } : (G.tut.active ? { type: 'simple' } : null);
+        spawnDebris(opts);
+      }
+      G.spawnTimer = (G.tut.active ? 2.6 : CORE.intervalFor(G.ringsCleared, CFG.difficulty)) * K;
+      if (G.tut.active && G.debrisCount === 3 && !G.tut.boostHinted) {
+        G.tut.boostHinted = true;
+        banner(T('tutBoost'));
+      }
+    }
+    updateDebris(wdt);
+    if (G.state !== S.PLAY) { refreshHud(); return; }
+    // cascade en cours
+    if (G.chain.active) {
+      G.chain.timer -= wdt;
+      if (G.chain.timer <= 0) chainStep();
+    }
+    // tutoriel
+    if (G.tut.active) {
+      G.tut.t += dt;
+      if (G.tut.hintSpin && G.totalRot > 0.9) G.tut.hintSpin = false;
+      if (!G.tut.ringClosed && G.tut.t > 90) { G.tut.done = true; store.set(K.tut, true); }
+    }
+    // alarme de danger (couche 7-8 occupée)
+    const danger = CORE.maxLevel(G.grid) >= 7;
+    AU.alarmTick(danger);
+    refreshHud();
+  } else if (G.state === S.HOME) {
+    G.rot += dt * 0.06;
+    G.ambientTimer -= dt;
+    if (G.ambientTimer <= 0) {
+      G.ambientTimer = 2.6;
+      const a = Math.random() * CORE.TAU;
+      G.ambient.push({ th: a, r: edgeDist(a) + 24, v: M * (0.1 + Math.random() * 0.08), color: Math.floor(Math.random() * 5) });
+    }
+    for (let i = G.ambient.length - 1; i >= 0; i--) {
+      const d = G.ambient[i];
+      d.r -= d.v * dt;
+      if (d.r < redR * 1.22) G.ambient.splice(i, 1);
+    }
+  }
+
+  // effets communs (à l'échelle du monde : ralentis de cascade inclus)
+  G.shake *= Math.exp(-7 * dt);
+  if (G.shake < 0.05) G.shake = 0;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.t += wdt;
+    if (p.t > p.life) { parts.splice(i, 1); continue; }
+    p.x += p.vx * wdt; p.y += p.vy * wdt;
+    p.vx *= Math.exp(-2.2 * wdt); p.vy *= Math.exp(-2.2 * wdt);
+  }
+  for (let i = popups.length - 1; i >= 0; i--) {
+    const p = popups[i];
+    p.t += wdt; p.y -= 34 * wdt;
+    if (p.t > p.life) popups.splice(i, 1);
+  }
+  for (let i = waves.length - 1; i >= 0; i--) {
+    waves[i].a += wdt * CORE.TAU * 1.8;
+    if (waves[i].a > CORE.TAU + 1) waves.splice(i, 1);
+  }
+  for (let i = flashes.length - 1; i >= 0; i--) {
+    flashes[i].t += wdt;
+    if (flashes[i].t > 0.3) flashes.splice(i, 1);
+  }
+  if (bannerText) {
+    bannerText.t += wdt;
+    if (bannerText.t > 1.6) bannerText = null;
+  }
+  // sprites : chute + squash
+  for (const sp of sprites.values()) {
+    if (sp.squash > 0) sp.squash = Math.max(0, sp.squash - wdt * 0.9);
+  }
+  if (G.grid) {
+    for (let s = 0; s < G.grid.n; s++) for (let l = 1; l <= G.grid.maxRing; l++) {
+      const b = CORE.at(G.grid, s, l);
+      if (!b) continue;
+      const sp = sprites.get(b.id);
+      if (sp) {
+        const diff = b.level - sp.vLevel;
+        if (Math.abs(diff) > 0.001) {
+          sp.vLevel += diff * Math.min(1, wdt * 13);
+          if (Math.abs(b.level - sp.vLevel) < 0.02) { sp.vLevel = b.level; sp.squash = Math.max(sp.squash, 0.1); }
+        }
+      }
+    }
+  }
+}
+function updateRotation(dt) {
+  const R = CFG.rotation;
+  if (G.holding) {
+    G.rotV += G.holding * R.accel * dt;
+    G.rotV = Math.max(-R.maxSpeed, Math.min(R.maxSpeed, G.rotV));
+  } else {
+    G.rotV *= Math.exp(-R.decay * dt);
+    if (Math.abs(G.rotV) < 1.4) {
+      // léger aimant vers l'alignement des secteurs
+      const target = Math.round(G.rot / SEC) * SEC;
+      let err = target - G.rot;
+      if (Math.abs(err) > 0.002) {
+        G.rotV += Math.max(-R.magnetSpeed, Math.min(R.magnetSpeed, err * R.magnetGain)) * dt * 6;
+      } else if (Math.abs(G.rotV) < 0.05) { G.rotV = 0; G.rot = target; }
+    }
+  }
+  G.rot += G.rotV * dt;
+  G.totalRot += Math.abs(G.rotV * dt);
+}
+
+/* ============================= dessin ================================ */
+function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  // fond
+  ctx.fillStyle = '#0c0e11';
+  ctx.fillRect(0, 0, W, H);
+  const grd = ctx.createRadialGradient(CX, CY, M * 0.1, CX, CY, Math.max(W, H) * 0.72);
+  grd.addColorStop(0, 'rgba(24,28,36,0.55)');
+  grd.addColorStop(1, 'rgba(12,14,17,0)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, W, H);
+  // étoiles
+  for (const st of stars) {
+    const tw = G.reduceMotion ? 0.75 : 0.55 + 0.45 * Math.sin(G.time * 1.7 + st.tw);
+    ctx.globalAlpha = 0.5 * st.z * tw;
+    ctx.fillStyle = '#cfd6e4';
+    ctx.fillRect(st.x, st.y, st.z > 0.8 ? 2 : 1, st.z > 0.8 ? 2 : 1);
+  }
+  ctx.globalAlpha = 1;
+  if (!G.reduceMotion && G.state !== S.PAUSE) {
+    for (const st of stars) { st.x -= dtGlobal * 2.2 * st.z; st.y += dtGlobal * 3.1 * st.z; if (st.x < 0) st.x += W; if (st.y > H) st.y -= H; }
+  }
+
+  // secousse
+  ctx.save();
+  if (G.shake > 0.1) ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
+
+  // débris d'ambiance (accueil)
+  if (G.state === S.HOME) {
+    for (const d of G.ambient) {
+      const x = CX + Math.cos(d.th) * d.r, y = CY + Math.sin(d.th) * d.r;
+      ctx.globalAlpha = Math.min(1, (edgeDist(d.th) - d.r) / (M * 0.25));
+      ctx.fillStyle = CFG.colors[d.color];
+      ctx.beginPath(); ctx.arc(x, y, ringW * 0.4, 0, CORE.TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  if (G.grid) {
+    const danger = CORE.maxLevel(G.grid) >= 7;
+    // ligne rouge
+    ctx.beginPath();
+    ctx.arc(CX, CY, redR, 0, CORE.TAU);
+    ctx.strokeStyle = CFG.danger;
+    ctx.lineWidth = danger ? 2.5 : 1.5;
+    ctx.globalAlpha = danger ? 0.55 + 0.45 * Math.abs(Math.sin(G.time * (G.reduceMotion ? 1.5 : 5))) : 0.3;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // noyau
+    ctx.beginPath(); ctx.arc(CX, CY, coreR, 0, CORE.TAU);
+    const cg = ctx.createRadialGradient(CX - coreR * 0.3, CY - coreR * 0.3, coreR * 0.1, CX, CY, coreR);
+    cg.addColorStop(0, '#f2ead9'); cg.addColorStop(0.7, '#ded4c2'); cg.addColorStop(1, '#b9ad97');
+    ctx.fillStyle = cg; ctx.fill();
+    // graduations tournantes (lisibilité de la rotation)
+    ctx.save();
+    ctx.strokeStyle = 'rgba(90,80,64,0.5)';
+    ctx.lineWidth = 1.4;
+    for (let s = 0; s < CFG.sectors; s++) {
+      const a = G.rot + s * SEC + SEC / 2;
+      ctx.beginPath();
+      ctx.moveTo(CX + Math.cos(a) * coreR * 0.62, CY + Math.sin(a) * coreR * 0.62);
+      ctx.lineTo(CX + Math.cos(a) * coreR * 0.86, CY + Math.sin(a) * coreR * 0.86);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // blocs
+    for (let s = 0; s < G.grid.n; s++) for (let l = 1; l <= G.grid.maxRing; l++) {
+      const b = CORE.at(G.grid, s, l);
+      if (b) drawBlock(b);
+    }
+
+    // marqueurs d'atterrissage (équité : recalculés en direct)
+    if (G.state === S.PLAY) {
+      for (const d of G.debris) {
+        const slots = debrisSlots(d);
+        const col = d.type === 'comet' ? '#ffd9b0' : CFG.colors[d.color];
+        for (const sl of slots) {
+          const over = sl.overflow;
+          const lv = over ? CFG.maxRings : sl.level;
+          const r1 = over ? redR : levelR(lv);
+          const r0 = over ? redR - ringW * 0.7 : levelR(lv - 1);
+          const a0 = G.rot + sl.sector * SEC + GAP_A * 1.4;
+          const a1 = G.rot + (sl.sector + 1) * SEC - GAP_A * 1.4;
+          ctx.beginPath();
+          ctx.arc(CX, CY, r1 - 1, a0, a1);
+          ctx.arc(CX, CY, r0 + 1, a1, a0, true);
+          ctx.closePath();
+          const pulse = 0.5 + 0.5 * Math.sin(G.time * (G.reduceMotion ? 2 : 7));
+          ctx.strokeStyle = over ? CFG.danger : col;
+          ctx.globalAlpha = 0.5 + 0.4 * pulse;
+          ctx.lineWidth = over ? 2.4 : 1.8;
+          if (over || d.type === 'comet') ctx.setLineDash([5, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+          if (over) { // point d'exclamation
+            const am = G.rot + (sl.sector + 0.5) * SEC, rm = (r0 + r1) / 2;
+            ctx.fillStyle = CFG.danger;
+            ctx.font = 'bold ' + Math.round(ringW * 0.9) + 'px system-ui, sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('!', CX + Math.cos(am) * rm, CY + Math.sin(am) * rm);
+          }
+        }
+      }
+      // tutoriel : trou à boucher mis en évidence
+      if (G.tut.active && !G.tut.ringClosed && typeof G.tutEmpty === 'number') {
+        const s = G.tutEmpty;
+        const r0 = coreR, r1 = levelR(1);
+        const a0 = G.rot + s * SEC + GAP_A * 2, a1 = G.rot + (s + 1) * SEC - GAP_A * 2;
+        ctx.beginPath();
+        ctx.arc(CX, CY, r1, a0, a1); ctx.arc(CX, CY, r0, a1, a0, true);
+        ctx.closePath();
+        const pulse = 0.5 + 0.5 * Math.sin(G.time * (G.reduceMotion ? 2 : 4));
+        ctx.strokeStyle = 'rgba(232,228,218,' + (0.25 + 0.3 * pulse) + ')';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+
+    // éclairs d'explosion + ondes pures
+    for (const f of flashes) {
+      const k = f.t / 0.3;
+      ctx.beginPath();
+      ctx.arc(CX, CY, f.r + k * ringW * 0.8, 0, CORE.TAU);
+      ctx.strokeStyle = f.color;
+      ctx.globalAlpha = (1 - k) * 0.8;
+      ctx.lineWidth = 3 + 5 * (1 - k);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    for (const w of waves) {
+      ctx.beginPath();
+      ctx.arc(CX, CY, w.r, w.a, Math.min(CORE.TAU, w.a + 1.1));
+      ctx.strokeStyle = '#ffffff';
+      ctx.globalAlpha = Math.max(0, 0.9 - w.a / CORE.TAU);
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+      ctx.strokeStyle = w.color;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // débris en vol
+  for (const d of G.debris) {
+    const col = d.type === 'comet' ? '#fff4e0' : CFG.colors[d.color];
+    for (let i = d.trail.length - 1; i >= 1; i--) {
+      const t = d.trail[i];
+      ctx.globalAlpha = 0.06 + 0.16 * (1 - i / d.trail.length);
+      ctx.fillStyle = d.type === 'comet' ? '#ffb27a' : col;
+      ctx.beginPath(); ctx.arc(t.x, t.y, ringW * 0.34 * (1 - i / (d.trail.length + 2)), 0, CORE.TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    const rad = ringW * (d.type === 'bar' ? 0.42 : 0.5);
+    if (d.type === 'bar') {
+      // deux moitiés à l'angle courant (adouci en phase A), reliées par un pont
+      const f = Math.min(1, d.tA / d.TA);
+      const thm = Math.atan2(Math.sin(d.thetas[0]) + Math.sin(d.thetas[1]), Math.cos(d.thetas[0]) + Math.cos(d.thetas[1]));
+      const thCur = d.phase === 'A' ? d.th0 + (thm - d.th0) * (f * f * (3 - 2 * f)) : thm;
+      for (const off of [-SEC / 2, SEC / 2]) {
+        const x = CX + Math.cos(thCur + off) * d.r, y = CY + Math.sin(thCur + off) * d.r;
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(x, y, rad, 0, CORE.TAU); ctx.fill();
+      }
+      ctx.strokeStyle = col; ctx.lineWidth = rad * 1.1;
+      ctx.beginPath();
+      ctx.arc(CX, CY, d.r, thCur - SEC / 2, thCur + SEC / 2);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(d.x, d.y, rad, 0, CORE.TAU); ctx.fill();
+      // motif
+      ctx.fillStyle = 'rgba(12,14,17,0.72)';
+      const g = rad * 0.52;
+      if (d.type === 'comet') {
+        ctx.fillStyle = '#ffb27a';
+        ctx.beginPath(); ctx.arc(d.x, d.y, g * 0.6, 0, CORE.TAU); ctx.fill();
+      } else if (d.type === 'unstable') {
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(d.x, d.y, rad, 0, CORE.TAU); ctx.fill();
+        ctx.strokeStyle = CFG.unstableColor; ctx.lineWidth = rad * 0.42;
+        ctx.beginPath(); ctx.arc(d.x, d.y, rad * 0.76, 0, CORE.TAU); ctx.stroke();
+        ctx.fillStyle = '#ffd75e';
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y - g * 0.9); ctx.lineTo(d.x + g * 0.8, d.y + g * 0.6); ctx.lineTo(d.x - g * 0.8, d.y + g * 0.6);
+        ctx.closePath(); ctx.fill();
+      } else switch (CFG.patterns[d.color]) {
+        case 'dot': ctx.beginPath(); ctx.arc(d.x, d.y, g * 0.6, 0, CORE.TAU); ctx.fill(); break;
+        case 'stripe': ctx.fillRect(d.x - g, d.y - g * 0.3, 2 * g, g * 0.6); break;
+        case 'tri': ctx.beginPath(); ctx.moveTo(d.x, d.y - g * 0.8); ctx.lineTo(d.x + g * 0.7, d.y + g * 0.55); ctx.lineTo(d.x - g * 0.7, d.y + g * 0.55); ctx.closePath(); ctx.fill(); break;
+        case 'ring': ctx.strokeStyle = 'rgba(12,14,17,0.72)'; ctx.lineWidth = g * 0.34; ctx.beginPath(); ctx.arc(d.x, d.y, g * 0.55, 0, CORE.TAU); ctx.stroke(); break;
+        case 'cross': ctx.fillRect(d.x - g * 0.8, d.y - g * 0.22, 1.6 * g, g * 0.44); ctx.fillRect(d.x - g * 0.22, d.y - g * 0.8, g * 0.44, 1.6 * g); break;
+      }
+    }
+  }
+
+  // particules
+  for (const p of parts) {
+    ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, CORE.TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore(); // fin secousse
+
+  // popups de score (hors secousse)
+  for (const p of popups) {
+    const k = p.t / p.life;
+    ctx.globalAlpha = k < 0.15 ? k / 0.15 : 1 - Math.max(0, (k - 0.55) / 0.45);
+    ctx.fillStyle = p.color;
+    ctx.font = '800 ' + Math.round(p.size * (k < 0.2 ? 0.7 + 1.8 * k : 1.06)) + 'px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(p.text, p.x, p.y);
+  }
+  ctx.globalAlpha = 1;
+
+  // bannière (niveau, tutoriel)
+  if (bannerText) {
+    const k = bannerText.t / 1.6;
+    ctx.globalAlpha = k < 0.12 ? k / 0.12 : 1 - Math.max(0, (k - 0.7) / 0.3);
+    ctx.fillStyle = '#e8e4da';
+    ctx.font = '800 ' + Math.round(M * 0.042) + 'px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(bannerText.text, CX, Math.max(56, CY - redR - M * 0.055));
+    ctx.globalAlpha = 1;
+  }
+
+  // textes du tutoriel (autour de la planète)
+  if (G.state === S.PLAY && G.tut.active) {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '600 ' + Math.round(M * 0.03) + 'px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(232,228,218,0.85)';
+    if (G.tut.hintSpin) {
+      ctx.fillText(T('tutSpin'), CX, CY + redR + M * 0.09);
+      drawArrow(CX - redR - M * 0.085, CY, -1);
+      drawArrow(CX + redR + M * 0.085, CY, 1);
+    } else if (G.debrisCount <= 2 && !G.tut.ringClosed) {
+      ctx.fillStyle = 'rgba(146,154,168,0.95)';
+      ctx.fillText(T('tutMarker'), CX, CY + redR + M * 0.09);
+    } else if (!G.tut.ringClosed && G.debrisCount <= 6) {
+      ctx.fillStyle = 'rgba(146,154,168,0.95)';
+      ctx.fillText(T('tutGap'), CX, CY + redR + M * 0.09);
+    }
+  }
+}
+function drawArrow(x, y, dir) {
+  ctx.save();
+  ctx.translate(x, y);
+  const R = M * 0.055;
+  ctx.strokeStyle = 'rgba(232,228,218,0.8)';
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.arc(0, 0, R, dir > 0 ? -0.9 : Math.PI - 0.9, dir > 0 ? 0.9 : Math.PI + 0.9);
+  ctx.stroke();
+  const a = dir > 0 ? 0.9 : Math.PI - 0.9;
+  const tx = Math.cos(a) * R, ty = Math.sin(a) * R;
+  ctx.translate(tx, ty);
+  ctx.rotate(a + dir * Math.PI / 2);
+  ctx.fillStyle = 'rgba(232,228,218,0.8)';
+  ctx.beginPath();
+  ctx.moveTo(0, -6); ctx.lineTo(5.5, 4); ctx.lineTo(-5.5, 4);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+/* =============================== HUD ================================= */
+const hud = document.getElementById('hud');
+let lastHudScore = -1, lastHudBest = -1, lastHudLevel = -1;
+function refreshHud() {
+  if (G.score !== lastHudScore) { document.getElementById('hudScore').textContent = G.score; lastHudScore = G.score; }
+  const b = Math.max(G.best, G.score);
+  if (b !== lastHudBest) { document.getElementById('hudBest').textContent = T('best') + ' ' + b; lastHudBest = b; }
+  if (G.level !== lastHudLevel) { document.getElementById('hudLevel').textContent = T('level') + ' ' + G.level; lastHudLevel = G.level; }
+}
+
+/* ============================= écrans ================================ */
+const screens = { scrHome: document.getElementById('scrHome'), scrPause: document.getElementById('scrPause'), scrOver: document.getElementById('scrOver') };
+function showScreen(id) {
+  for (const k in screens) screens[k].classList.toggle('hidden', k !== id);
+}
+function applyLang() {
+  document.documentElement.lang = G.lang;
+  document.getElementById('homeTag').innerHTML = T('tag');
+  document.getElementById('how1').innerHTML = T('how1');
+  document.getElementById('how2').innerHTML = T('how2');
+  document.getElementById('how3').innerHTML = T('how3');
+  document.getElementById('btnPlay').textContent = T('play');
+  document.getElementById('homeBest').textContent = G.best > 0 ? T('best') + ' ' + G.best : '';
+  document.getElementById('pauseTitle').textContent = T('paused');
+  document.getElementById('btnResume').textContent = T('resume');
+  document.getElementById('btnRestart').textContent = T('restart');
+  document.getElementById('btnHome').textContent = T('home');
+  document.getElementById('pauseHint').textContent = T('pauseHint');
+  document.getElementById('goTitle').textContent = T('gameover');
+  document.getElementById('btnReplay').textContent = T('replay');
+  document.getElementById('btnHome2').textContent = T('home');
+  document.getElementById('goHint').textContent = T('goHint');
+  document.getElementById('goBestLbl').textContent = T('goBestLbl');
+  document.getElementById('goChainLbl').textContent = T('goChainLbl');
+  for (const id of ['btnLang', 'btnLang2']) document.getElementById(id).textContent = G.lang.toUpperCase();
+  lastHudBest = -1; lastHudLevel = -1;
+  refreshHud();
+}
+function toggleSound() {
+  G.sound = !G.sound;
+  store.set(K.sound, G.sound);
+  AU.ensure(); AU.setMuted(!G.sound);
+  for (const id of ['btnSound', 'btnSound2']) document.getElementById(id).classList.toggle('off', !G.sound);
+  AU.ui();
+}
+function toggleMotion() {
+  G.reduceMotion = !G.reduceMotion;
+  store.set(K.motion, G.reduceMotion);
+  for (const id of ['btnMotion', 'btnMotion2']) document.getElementById(id).classList.toggle('off', !G.reduceMotion);
+  AU.ui();
+}
+function cycleLang() {
+  G.lang = G.lang === 'en' ? 'fr' : G.lang === 'fr' ? 'es' : 'en';
+  store.set(K.lang, G.lang);
+  applyLang();
+  AU.ui();
+}
+function pauseGame() {
+  if (G.state !== S.PLAY) return;
+  G.state = S.PAUSE;
+  AU.alarmTick(false);
+  showScreen('scrPause');
+}
+function resumeGame() {
+  if (G.state !== S.PAUSE) return;
+  G.state = S.PLAY;
+  showScreen(null);
+}
+function decorativeGrid() {
+  // planète d'ambiance pour l'écran d'accueil : anneaux partiels, sans anneau complet
+  const g = CORE.createGrid(CFG.sectors, CFG.maxRings);
+  const heights = [1, 2, 1, 3, 0, 2, 1, 3, 1, 2, 4, 1];
+  const cols = [0, 1, 2, 3, 0, 2, 4, 1, 3, 0, 2, 4];
+  for (let s = 0; s < CFG.sectors; s++) for (let i = 0; i < heights[s]; i++) CORE.place(g, s, cols[(s + i) % 12]);
+  return g;
+}
+function goHome() {
+  G.state = S.HOME;
+  G.grid = decorativeGrid();
+  sprites.clear();
+  G.debris = [];
+  AU.alarmTick(false);
+  hud.style.display = 'none';
+  applyLang();
+  showScreen('scrHome');
+}
+
+/* ============================ entrées ================================ */
+function anyGesture() { AU.ensure(); }
+window.addEventListener('keydown', e => {
+  anyGesture();
+  const k = e.key;
+  if (['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', ' '].includes(k)) e.preventDefault();
+  if (G.state === S.HOME) {
+    if (k === 'Enter' || k === ' ') { AU.ui(); newGame(); }
+    return;
+  }
+  if (G.state === S.OVER) {
+    if (k === 'Enter' || k === ' ') { AU.ui(); newGame(); }
+    return;
+  }
+  if (k === 'p' || k === 'P' || k === 'Escape') {
+    if (G.state === S.PLAY) pauseGame(); else if (G.state === S.PAUSE) resumeGame();
+    return;
+  }
+  if (G.state !== S.PLAY) return;
+  if (k === 'ArrowLeft' || k === 'a' || k === 'A') G.holding = -1;
+  else if (k === 'ArrowRight' || k === 'd' || k === 'D') G.holding = 1;
+  else if ((k === 'ArrowDown' || k === 's' || k === 'S' || k === ' ') && !e.repeat) boostNearest();
+  else if (k === 'm' || k === 'M') toggleSound();
+});
+window.addEventListener('keyup', e => {
+  const k = e.key;
+  if ((k === 'ArrowLeft' || k === 'a' || k === 'A') && G.holding === -1) G.holding = 0;
+  else if ((k === 'ArrowRight' || k === 'd' || k === 'D') && G.holding === 1) G.holding = 0;
+});
+
+let touch = null;
+canvas.addEventListener('pointerdown', e => {
+  anyGesture();
+  if (G.state !== S.PLAY) return;
+  touch = { x: e.clientX, y: e.clientY, sx: e.clientX, t: performance.now(), moved: false };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!touch || G.state !== S.PLAY) return;
+  const dx = e.clientX - touch.x;
+  if (Math.abs(e.clientX - touch.sx) > CFG.touch.tapMaxDist || Math.abs(e.clientY - touch.y) > CFG.touch.tapMaxDist) touch.moved = true;
+  G.rot += dx * CFG.touch.dragGain;
+  G.rotV = dx * CFG.touch.dragGain * 60;
+  G.totalRot += Math.abs(dx * CFG.touch.dragGain);
+  touch.x = e.clientX; touch.y = e.clientY;
+});
+canvas.addEventListener('pointerup', e => {
+  if (!touch) return;
+  const dt = performance.now() - touch.t;
+  if (!touch.moved && dt < CFG.touch.tapMaxMs) boostNearest();
+  else G.rotV = Math.max(-6, Math.min(6, G.rotV * 0.5));
+  touch = null;
+});
+canvas.addEventListener('pointercancel', () => { touch = null; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+/* boutons */
+document.getElementById('btnPlay').addEventListener('click', () => { anyGesture(); AU.ui(); newGame(); });
+document.getElementById('btnReplay').addEventListener('click', () => { anyGesture(); AU.ui(); newGame(); });
+document.getElementById('btnRestart').addEventListener('click', () => { anyGesture(); AU.ui(); newGame(); });
+document.getElementById('btnResume').addEventListener('click', () => { AU.ui(); resumeGame(); });
+document.getElementById('btnHome').addEventListener('click', () => { AU.ui(); goHome(); });
+document.getElementById('btnHome2').addEventListener('click', () => { AU.ui(); goHome(); });
+document.getElementById('btnPause').addEventListener('click', () => { AU.ui(); pauseGame(); });
+document.getElementById('btnSound').addEventListener('click', toggleSound);
+document.getElementById('btnSound2').addEventListener('click', toggleSound);
+document.getElementById('btnMotion').addEventListener('click', toggleMotion);
+document.getElementById('btnMotion2').addEventListener('click', toggleMotion);
+document.getElementById('btnLang').addEventListener('click', cycleLang);
+document.getElementById('btnLang2').addEventListener('click', cycleLang);
+
+/* pause automatique */
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+window.addEventListener('blur', () => pauseGame());
+
+/* ============================ boucle ================================= */
+const DBG = (() => { try { return /(?:\?|&)debug=1\b/.test(window.location.search); } catch (e) { return false; } })();
+const dbgEl = document.getElementById('debug');
+if (DBG) dbgEl.style.display = 'block';
+let lastT = performance.now(), fpsEma = 60, dbgT = 0, dtGlobal = 0.016, rafPending = false;
+function frame(t) {
+  rafPending = false;
+  const dt = (t - lastT) / 1000;
+  lastT = t;
+  if (dt > 0) {                                  // horloge parfois non monotone (rAF vs performance.now)
+    dtGlobal = Math.min(0.05, dt);
+    fpsEma += (1 / dtGlobal - fpsEma) * 0.05;
+    if (G.state !== S.PAUSE) update(dtGlobal);
+    draw();
+  }
+  if (DBG) {
+    dbgT += dtGlobal;
+    if (dbgT > 0.25) {
+      dbgT = 0;
+      dbgEl.textContent = Math.round(fpsEma) + ' FPS · ' +
+        (G.state === S.PLAY ? CORE.intervalFor(G.ringsCleared, CFG.difficulty).toFixed(2) + 's' : '—') +
+        ' · ' + T('level') + ' ' + G.level;
+    }
+  }
+  if (!rafPending) { rafPending = true; requestAnimationFrame(frame); }
+}
+
+/* démarrage */
+resize();
+G.grid = decorativeGrid();
+applyLang();
+for (const id of ['btnSound', 'btnSound2']) document.getElementById(id).classList.toggle('off', !G.sound);
+for (const id of ['btnMotion', 'btnMotion2']) document.getElementById(id).classList.toggle('off', !G.reduceMotion);
+rafPending = true;
+requestAnimationFrame(frame);
+// secours : certains environnements (webview occluse, lecteur intégré) gèlent
+// requestAnimationFrame alors que la page reste « visible » — un minuteur
+// veille à ce que le jeu continue. Page cachée → pause automatique déjà active.
+setInterval(() => {
+  if (document.hidden) return;
+  if (performance.now() - lastT > 250) frame(performance.now());
+}, 40);
+
+/* crochet de test (console) — aucun effet en jeu */
+window.__accretion = {
+  CORE, CFG, G, T,
+  state: () => G.state,
+  grid: () => G.grid,
+  spawnDebris, debrisSlots, newGame, gameOver,
+  fillColumn(s, n, color) { for (let i = 0; i < n; i++) CORE.place(G.grid, s, color); syncSprites(); },
+  setRot(a) { G.rot = a; },
+  targetedSpawn(type, sector, color) {
+    const th = G.rot + (sector + 0.5) * SEC;
+    const th0 = th - 0.8, r0 = edgeDist(th0) + 24;
+    const d = { id: ++debrisGid, type, color: color ?? 0, thetas: type === 'bar' ? [th, th + SEC] : [th], th0, r0, r: r0, phase: 'A', tA: 0, TA: 0.6, v: M * CFG.debris.diveV0, boost: 1, boosted: false, trail: [], x: 0, y: 0 };
+    G.debris.push(d); G.debrisCount++;
+    return d;
+  }
+};
+</script>
+</body>
+</html>
